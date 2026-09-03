@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kr-rofl-batch-collector"
+version = "1.0.0"
+description = "Current-patch high-elo KR Ranked Solo ROFL batch collector"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "httpx>=0.27,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8,<10",
+  "ruff>=0.9",
+]
+
+[project.scripts]
+collector = "kr_rofl_collector.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
