@@ -22,6 +22,7 @@
 | 国际服 Replay | 当前会话 Replay 路由 probe、下载重试、ReplayV2 容器校验、hash、原子发布、manifest、失败记录及恢复 | 自动化测试；KR patch 16.17 历史真实采集 108 个并全量完整性审计 |
 | 国服配对 | 腾讯 HN1 会话的指定 game ID 下载、本机 Replay 扫描、基线/监听、SUMMARY/DETAILS 配对、状态查询和持久化 | 迁入源码测试与集成测试；不能据此声称其他国服平台可用 |
 | 本地安全 | `.env`、`data/`、日志、Replay 与数据库不入库；会话凭据只用于运行时请求；数据根分离 | 静态检查和测试覆盖相关路径 |
+| 发布检查 | GitHub Actions 在 Windows / Python 3.11 上安装、运行 Ruff 和根项目离线测试 | 首次公开 CI [运行 #1](https://github.com/Ghou133/global-rofl-batch-collector/actions/runs/35802641538) 全部通过 |
 
 ## 未实现或未验收
 
@@ -36,7 +37,7 @@
 
 ### 近期：发布与可复现
 
-- 在 GitHub CI 运行离线测试和 Ruff，公开每次提交的结果。
+- 扩展干净环境验证矩阵，记录不同 Python 版本及客户端安装状态下的运行结果。
 - 用干净的 Windows 环境按 README 重装，验证入口、配置和报错；记录 Python 版本与客户端环境。
 - 建立按平台/patch 的验收表，附可脱敏的 probe、下载和完整性结果，不上传 Replay 或 token。
 

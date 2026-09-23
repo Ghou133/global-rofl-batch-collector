@@ -1,5 +1,7 @@
 # Global ROFL Batch Collector
 
+[![CI](https://github.com/Ghou133/global-rofl-batch-collector/actions/workflows/ci.yml/badge.svg)](https://github.com/Ghou133/global-rofl-batch-collector/actions/workflows/ci.yml)
+
 面向《英雄联盟》国际服与腾讯国服的本地 Replay 采集器。项目的目的是建立可恢复、可核验、保留来源信息的 `.rofl` 数据集，供后续研究或解析使用。它不提供 Replay 语义解码，也不随仓库发布比赛数据或账号凭据。
 
 项目由两条独立采集链组成：
@@ -13,7 +15,7 @@
 
 ## 当前进度
 
-- **已实现并通过本地自动化测试：**统一 `collector` 入口、17 个国际服平台的路由与数据分区、Riot API 发现和回放容器校验、腾讯 `HN1` Replay 与 SUMMARY/DETAILS 配对、持久化与中断恢复。根项目测试 94 项通过，迁入国服源码的原测试 62 项通过，Ruff 检查通过。
+- **已实现并通过自动化测试：**统一 `collector` 入口、17 个国际服平台的路由与数据分区、Riot API 发现和回放容器校验、腾讯 `HN1` Replay 与 SUMMARY/DETAILS 配对、持久化与中断恢复。根项目本地测试 94 项通过，迁入国服源码的原测试 62 项通过，Ruff 检查通过；首次 GitHub Windows CI 的安装、Ruff 和测试也通过。
 - **历史真实采集证据：**原 KR 链在 patch `16.17` 保存 108 个 `VERIFIED` Replay，并对这 108 个文件通过完整性审计。这是该次 KR 数据集的历史结果，不代表当前 patch 或其他平台已通过真实客户端采集。
 - **尚未完成：**17 个国际平台的逐区真实客户端验收、腾讯国服 `HN1` 以外平台的端点与实测、Replay exact-build 语义解码、跨平台统一数据模型和公开数据集发布。详见 [开发路线与进度](ROADMAP.md)。
 
