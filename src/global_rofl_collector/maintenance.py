@@ -76,6 +76,7 @@ def normalize_http_gzip_replays(
     report = progress or (lambda _: None)
     dataset_id = int(dataset["id"])
     patch = str(dataset["patch_key"])
+    platform = str(dataset["platform"])
     rows = db.manifest_rows(dataset_id)
     normalized = 0
     already_raw = 0
@@ -85,7 +86,7 @@ def normalize_http_gzip_replays(
         final = config.data_dir / str(row["file_path"])
         backup = (
             config.data_dir
-            / "KR"
+            / platform
             / patch
             / "quarantine"
             / "http-gzip"
@@ -140,8 +141,9 @@ def normalize_http_gzip_replays(
             },
         )
 
-    manifest = write_manifest(db, dataset_id, config.data_dir, patch)
+    manifest = write_manifest(db, dataset_id, config.data_dir, patch, platform)
     return {
+        "platform": platform,
         "patch": patch,
         "examined": len(rows),
         "normalized": normalized,

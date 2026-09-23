@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from kr_rofl_collector.db import Database
-from kr_rofl_collector.models import JobState, MatchRecord, Quality
+from global_rofl_collector.db import Database
+from global_rofl_collector.models import JobState, MatchRecord, Quality
 
 
 def _start_dataset(db: Database, patch: str = "26.18") -> tuple[int, int]:

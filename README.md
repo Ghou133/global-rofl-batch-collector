@@ -1,166 +1,97 @@
-# KR Current-Patch High-Elo ROFL Batch Collector
+# Global ROFL Batch Collector
 
-这是一个一次性批量采集工具：从 Riot 官方 API 发现韩国服务器（KR）当前版本的高分段单双排比赛，按比赛中的 Challenger / Grandmaster / Master 玩家数量排序，并通过已验证的 Riot Replay 后端下载、校验和保存官方 `.rofl` 文件。
+面向《英雄联盟》国际服与腾讯国服的本地 Replay 采集器。项目的目的是建立可恢复、可核验、保留来源信息的 `.rofl` 数据集，供后续研究或解析使用。它不提供 Replay 语义解码，也不随仓库发布比赛数据或账号凭据。
 
-它不是常驻监控服务，不需要 KR 游戏账号，也不会自动登录、重启或关闭 League Client。你只需在需要新版本样本时手动运行一次。
+项目由两条独立采集链组成：
 
-当前已用一个非 KR（JP1）合法登录会话实际验证：显式请求 KR 比赛身份时，Replay 后端可以返回完整 Replay。因此当前结论是 `KR_ACCOUNT_REQUIRED: NO`。验证范围和证据见 [REPLAY_ACQUISITION_FINDINGS.md](REPLAY_ACQUISITION_FINDINGS.md)。
+| 采集链 | 范围 | 输入与产出 | 本地存储 |
+| --- | --- | --- | --- |
+| Riot 国际服 | 17 个可选平台，默认 `KR` | Riot 官方 API 发现当前版本高分段单双排比赛；通过已登录的 League Client 获取并验证 Replay | `data/collector.sqlite3` 和 `data/<platform>/<patch>/` |
+| 腾讯国服 | 当前支持 `HN1` 会话 | 按 game ID 或本机 Replay 文件采集，并配对同局的新鲜 SUMMARY、DETAILS | `data/CN/replay-paired/` |
 
-当前恢复后的 KR `16.17` 数据集已有 `108 VERIFIED`，并已通过对全部 108 个文件的 `status --verify-files` 完整性审计。V1 最低交付目标仍是 100 场；108 是实际保留下来的结果，不会为了把数字缩回 100 而删除多出的 8 场。
+两条链的比赛身份、认证、SQLite schema 与文件路径彼此独立。`data/`、日志和 `.env` 都不进入 Git。项目与 Riot Games、腾讯无隶属关系；使用者需遵守相关服务条款及数据使用规则。
 
-## 首次准备
+## 当前进度
 
-需要：
+- **已实现并通过本地自动化测试：**统一 `collector` 入口、17 个国际服平台的路由与数据分区、Riot API 发现和回放容器校验、腾讯 `HN1` Replay 与 SUMMARY/DETAILS 配对、持久化与中断恢复。根项目测试 94 项通过，迁入国服源码的原测试 62 项通过，Ruff 检查通过。
+- **历史真实采集证据：**原 KR 链在 patch `16.17` 保存 108 个 `VERIFIED` Replay，并对这 108 个文件通过完整性审计。这是该次 KR 数据集的历史结果，不代表当前 patch 或其他平台已通过真实客户端采集。
+- **尚未完成：**17 个国际平台的逐区真实客户端验收、腾讯国服 `HN1` 以外平台的端点与实测、Replay exact-build 语义解码、跨平台统一数据模型和公开数据集发布。详见 [开发路线与进度](ROADMAP.md)。
 
-- Windows 电脑；
-- Python 3.11 或更高版本；
-- 已安装的 League of Legends Client；
-- 一个可登录 League Client 的 Riot 账号，账号不必属于 KR；
-- Riot Development API Key 或 Personal API Key。
+## 安装
 
-在 PowerShell 中进入本项目目录，然后只做一次安装：
+目前以 **Windows、Python 3.11+、已安装并登录的 League Client** 为运行环境。打开 PowerShell，在项目根目录执行：
 
 ```powershell
 py -3.11 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 Copy-Item .env.example .env
-notepad .env
 ```
 
-在打开的 `.env` 中，把自己的 Riot API Key 填在等号后面：
+国际服需要把自己的 `RIOT_API_KEY` 写入 `.env`；可从 [Riot Developer Portal](https://developer.riotgames.com/) 获取。也可通过同名环境变量提供。国服 `cn replay` 不使用此 Key，但要求本人已登录的腾讯 League Client 会话。不要提交 `.env`、客户端 lockfile、token、数据库或 Replay。
 
-```dotenv
-RIOT_API_KEY=YOUR_RIOT_API_KEY
+```powershell
+.\collector.cmd --help
+.\collector.cmd cn --help
+.\collector.cmd cn replay --help
 ```
 
-不要把真实 Key 发给别人，也不要放进截图、文档或 Git。项目已经通过 `.gitignore` 排除 `.env`、数据库、Replay 和运行数据。
+安装后也可在已激活的虚拟环境中直接运行 `collector`。`collector.cmd` 使用项目的 `.venv`。
 
-API Key 可从 [Riot Developer Portal](https://developer.riotgames.com/) 获取。Development Key 会失效；失效时只需更新 `.env`，不需要改代码或重装项目。
+## Riot 国际服用法
 
-## 每次正常使用
-
-先人工打开 League Client 并完成登录。停留在客户端主界面即可，不要退出客户端。然后在本项目目录依次运行：
+先启动并登录 League Client，再检查当前平台的 API、版本与 Replay 路由。`KR` 是兼容原项目的默认值：
 
 ```powershell
 .\collector.cmd probe
 .\collector.cmd run --target 100
-.\collector.cmd status
-```
-
-这就是正常使用所需的最少命令。
-
-`probe` 检查 Riot API、KR 排行榜、ASIA Match-V5、当前版本、League Client、LCU、Replay 路线、数据库和存储。由于内置的跨区 LCU 路线可能失败，只要 `REPLAY_ACQUISITION: PASS` 且 Route B 为 `PASS`，Replay 获取能力就是可用的。
-
-`run --target 100` 自动执行发现、去重、当前版本过滤、质量排序、下载、完整性校验和 manifest 更新，达到目标后退出。
-
-批量发现和下载可能持续较长时间；运行期间请保持 League Client 已登录、终端窗口开启，并确保数据磁盘有足够空间。
-
-`status` 只读取持久化结果并显示当前数据集状态。需要重新读取每一个 `.rofl`、计算哈希，并检查 `RIOT` ReplayV2 文件头、版本、尾部 metadata 与 chunk 布局时使用：
-
-```powershell
 .\collector.cmd status --verify-files
 ```
 
-这个完整审计可能需要较长时间，但不会修改或删除 Replay。
-
-> 命令必须从项目目录运行，因为 `.env` 和默认 `data` 路径相对于当前项目目录解析。若必须在别处运行，把 `--project-root` 放在子命令之前。
+选择其他平台时，**在子命令前**传 `--platform`：
 
 ```powershell
-C:\path\to\collector.cmd --project-root C:\path\to\kr-rofl-batch-collector status
+.\collector.cmd --platform EUW1 probe
+.\collector.cmd --platform EUW1 run --target 100
+.\collector.cmd --platform EUW1 status --verify-files
 ```
 
-## `--target` 的准确含义
+可选平台：`KR`、`JP1`、`NA1`、`BR1`、`LA1`、`LA2`、`EUW1`、`EUN1`、`TR1`、`RU`、`ME1`、`OC1`、`PH2`、`SG2`、`TH2`、`TW2`、`VN2`。平台自动映射到对应 Match-V5 区域路由。可在 `.env` 设置 `COLLECTOR_PLATFORM` 作为默认平台；命令行参数优先。
 
-`--target` 是“当前 KR 版本数据集中最终应有多少个已验证 Replay”，不是“本次再下载多少个”。以下只是语义示例，不代表当前数据集已经达到这些数量：
+`--target 100` 指该平台当前 patch 的**累计已验证数量**，不是本次新增 100 场。只有 `probe` 的回放能力检查通过，`run` 才会批量下载。`VERIFIED` 表示文件通过本项目的 ReplayV2 容器布局、版本、metadata、chunk 边界及 SHA-256 检查，不能推断 packet 语义正确或 Replay 一定能在每个客户端版本播放。`--json` 可放在子命令前输出机器可读结果。
 
-1. `run --target 100` 表示希望该 patch 最终有 100 场；
-2. 以后改为 `run --target 300` 时，程序用 300 减去数据库中当时的实际 `VERIFIED` 数，只下载差额；
-3. 如果实际 `VERIFIED` 已经不少于指定 target，程序不会重复下载。
+客户端会话和 Riot 后端会变化。跨平台下载可用性需在目标平台、目标 patch 的当前环境用 `probe` 和实际采集确认。
 
-计数只认数据库状态为 `VERIFIED` 的 Replay。新版本出现后，程序自动建立新版本数据集并从该版本自己的目标数开始；旧版本目录和文件保留。
+## 腾讯国服用法
 
-## 数据保存在哪里
-
-默认数据都在项目内的 `data` 目录：
-
-```text
-data/
-  collector.sqlite3
-  KR/
-    <patch>/
-      builds/
-        <完整 gameVersion>/
-          rofl/
-            KR_<gameId>.rofl
-      manifests/
-        dataset_manifest.jsonl
-      reports/
-        run_<id>.json
-        parser_portability_20/
-      quarantine/
-        http-gzip/
-          KR_<gameId>.rofl.gz
-```
-
-- 数据库：`data/collector.sqlite3`
-- Replay：`data/KR/<patch>/builds/<完整版本>/rofl/`
-- Manifest：`data/KR/<patch>/manifests/dataset_manifest.jsonl`
-- 运行报告：`data/KR/<patch>/reports/`
-- 日志目录：`logs/`
-
-路径中的 `<patch>` 是研究版本，例如 `16.17`；`<完整 gameVersion>` 会保留类似 `16.17.810.4348` 的完整 build 区别。下游程序应读取 manifest，不要靠扫描文件夹猜测版本或元数据。
-
-正常 `.rofl` 必须是以 `RIOT` 开头的官方 ReplayV2 文件。Replay 后端虽然使用 HTTP `Content-Encoding: gzip` 传输，但 collector 会像 League Client 一样透明解码，绝不会把传输层 gzip wrapper 当成 `.rofl` 容器。`quarantine/http-gzip/` 只保存本次遗留格式迁移前的 wire bytes，供审计和回滚，不计入数据集。
-
-## 数据保护原则
-
-本项目默认 `PRESERVATION_FIRST`：
-
-- 把 HTTP gzip 传输透明解码到 `.rofl.partial`，确认文件以 `RIOT` 开头且 ReplayV2 布局、metadata 和 chunk 区域有效后，才原子改名为 `.rofl`；
-- 已存在的最终 `.rofl` 不会被覆盖；
-- 重启时会验证并接管已有完整文件，不会重新下载；
-- 新 `run` 会把同一 dataset 上次残留的 `RUNNING` 记录明确标成 `INTERRUPTED`，并把 `DOWNLOADING` / `DOWNLOADED` 纳入可恢复 backlog；
-- 恢复时若未完成 job 已有同名 final 但文件损坏，程序保留原文件、记录错误、将 job 标成 `FAILED_PERMANENT`，然后继续其他任务，不会覆盖它；
-- 新 patch、数据库迁移、重跑和 manifest 重建都不会主动删除旧 Replay；
-- manifest 和运行报告通过临时文件原子替换；
-- SQLite 使用 WAL、完整同步和事务保存状态。
-
-如果运行中断，直接重新执行同一条 `run --target ...` 命令。不要手工删除 `.partial`、`.rofl` 或数据库。备份时最好先停止 collector，再把整个 `data` 目录复制到其他磁盘。
-
-## 本次遗留 gzip 迁移命令
-
-`normalize-http-gzip` 不是日常命令，只用于修复本次早期运行中误把 HTTP gzip wire bytes 直接保存为 `.rofl` 的遗留文件。当前 downloader 已经直接保存解码后的 `RIOT` 文件，新数据不需要执行它。
-
-迁移已采用 preservation-first 方式：先把原始 wrapper 完整保存在 `data/KR/<patch>/quarantine/http-gzip/`，验证解码后的 build 和 ReplayV2 结构，再替换工作副本并重写 manifest。除非正在处理同一批遗留文件，否则不要运行：
+目前国服采集链针对腾讯 `HN1` 客户端会话。直接下载指定比赛：
 
 ```powershell
-.\collector.cmd normalize-http-gzip
+.\collector.cmd cn replay --game-id <game-id>
+.\collector.cmd cn replay --status
 ```
 
-## KR parser portability
+也可以监视 League Client 已下载的本机 Replay；首次运行默认先建立现有文件基线，之后只处理新文件：
 
-现有 Replay parser 已对 20 个 build `16.17.810.4348` 的原始 `RIOT` 文件完成实测：20/20 容器、Zstd 解压和 block framing 通过，每个文件都是 0 framing errors。由于 parser 没有这个 exact build 的语义 decoder profile，packet 语义没有解码，结论是：
-
-```text
-KR_PARSER_PORTABILITY: PARTIAL
-reason: UNSUPPORTED_REPLAY_VERSION
+```powershell
+.\collector.cmd cn replay
+.\collector.cmd cn replay --watch
 ```
 
-这不是容器损坏；它表示二进制容器可读，但英雄死亡、伤害、施法、位置等语义事件仍需增加与 `16.17.810.4348` 精确匹配的 profile。本文不据此声称最终批量目标已经完成。
+`--game-id` 和 `--source-dir` 可重复指定。`--limit 10` 限制单次处理数；`--include-existing` 只适合在**全新数据根**受控导入旧文件。无 `--game-id` 时，命令会扫描文件并重试已排队的远程/本机候选，**不会自动从排行榜发现新比赛**。完整国服采集器还提供 `collector cn probe`、`collect`、`run`、`status` 和 `audit`；其默认一般采集根为 `data/CN/`，与 `cn replay` 的配对归档根不同。
 
-## 常见提示
+国服 Replay 只有在文件、game ID、patch、同局 SUMMARY/DETAILS 及 hash 均满足校验后才记为 `VALIDATED`。失败、不可用、排队和中断状态会保留以供复查；`--status` 仅查询，不下载。
 
-- `API_KEY_MISSING`：在项目根目录创建 `.env` 并填写 `RIOT_API_KEY`。
-- `API_KEY_INVALID` 或 `API_FORBIDDEN`：Key 被拒绝；Development Key 可能已经失效。更新 `.env` 后重试。
-- `ACTION_REQUIRED: LOGIN_TO_LEAGUE_CLIENT` 或 `LEAGUE_CLIENT_CLOSED`：人工启动 League Client 并完成登录，然后重试。程序不会替你输入账号密码。
-- `REPLAY_EDGE_UNDISCOVERED`：保持 League Client 已登录并在主界面活动后重试。程序通常从当前 League Client 日志识别 Replay 后端；高级排障见 [OPERATIONS.md](OPERATIONS.md)。
-- `TARGET_NOT_REACHED`：本轮候选池已耗尽，但已验证资产仍然保留。这是可恢复错误；稍后用相同目标重跑即可继续发现和补齐。
-- `INTERRUPTED`：用户中断是安全的。重新运行同一命令会从数据库和已有文件继续。
-- `REPLAY_RATE_LIMITED`：Replay 后端返回 429；自动重试会遵守 `Retry-After`，实际等待取它与指数退避加 jitter 中较大的值。
+## 数据、安全与维护
 
-## 更多文档
+采集记录和 Replay 保存在本机 `data/`，项目不会自动清理旧 patch，也不会覆盖已验证的不同 Replay。备份前停止 collector，然后复制整个 `data/`，包括 SQLite 数据库及可能存在的 WAL/SHM 文件。公开数据前应另外审查比赛与玩家标识；源码仓库不包含数据集。
 
-- [ARCHITECTURE.md](ARCHITECTURE.md)：组件、数据流、排序和恢复设计；
-- [DATASET_SCHEMA.md](DATASET_SCHEMA.md)：SQLite 表、状态和 manifest 字段；
-- [OPERATIONS.md](OPERATIONS.md)：安装、配置、故障恢复、备份和审计；
-- [REPLAY_ACQUISITION_FINDINGS.md](REPLAY_ACQUISITION_FINDINGS.md)：无 KR 账号 Replay 获取的实测证据。
+维护、配置和故障恢复见 [操作手册](OPERATIONS.md)，数据库字段见 [数据集 Schema](DATASET_SCHEMA.md)，模块关系见 [代码结构与架构](ARCHITECTURE.md)。[KR 历史说明](KR_REFERENCE.md) 与 [回放获取实测记录](REPLAY_ACQUISITION_FINDINGS.md) 保留原 KR 证据，其时间和平台范围不能外推。迁入边界见 [集成决策](INTEGRATION_DECISION.md)。
+
+## 开发与许可
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check src tests
+```
+
+贡献说明见 [CONTRIBUTING.md](CONTRIBUTING.md)，漏洞报告方式见 [SECURITY.md](SECURITY.md)。源码按 [GNU AGPLv3](LICENSE)（`AGPL-3.0-only`）发布。

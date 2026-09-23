@@ -1,5 +1,40 @@
 # 架构说明
 
+## 当前代码结构
+
+```text
+collector.cmd                         Windows 启动脚本
+pyproject.toml                        包元数据、依赖和测试/静态检查配置
+src/
+  global_rofl_collector/
+    entrypoint.py                     统一命令分发
+    cli.py, config.py, platforms.py   国际服命令、配置和平台路由
+    riot.py, discovery.py, service.py 官方 API、比赛发现与运行编排
+    replay.py, maintenance.py         Replay 获取、验证、恢复与旧数据迁移
+    db.py, models.py, manifest.py     状态、数据模型和下游清单
+    locking.py, errors.py             单进程锁和稳定错误码
+  lol_collector/
+    cli.py, collection_*.py           国服一般采集入口与流水线
+    adapters.py, transport.py         本机客户端和腾讯 SGP 通信
+    replay_capture.py, replay_store.py,
+    replay_archive.py                 国服 Replay 与 SUMMARY/DETAILS 配对
+    repository.py, schema.py,
+    schema.sql, *_store.py            国服独立 SQLite 数据模型
+    probe.py, security.py, audit.py   能力检查、凭据扫描与审计
+  kr_rofl_collector/                  旧 Python 模块名兼容入口
+tests/                                统一项目离线测试
+.github/workflows/ci.yml             GitHub 离线检查
+data/                                 运行产物；被 Git 忽略
+```
+
+统一入口按首个子命令分发：`collector cn ...` 进入 `lol_collector`，其他命令进入 `global_rofl_collector`。国际服由 `--platform` 选择明确的 League-V4、Match-V5 和 Data Dragon realm 路由；相同的 `data/collector.sqlite3` 中按 `(platform, patch)` 分 dataset，Replay 位于 `data/<platform>/<patch>/`。国服单独使用 `data/CN/` 和 `data/CN/replay-paired/`，不会把腾讯 game ID 当成 Riot Match-V5 ID，也不会读取国际服数据库。
+
+边界与接口以 [README.md](README.md)、[DATASET_SCHEMA.md](DATASET_SCHEMA.md) 和实际源码为准。[ROADMAP.md](ROADMAP.md) 把代码能力与真实客户端验收分别列出。
+
+## 原 KR 链历史设计细节
+
+以下章节是迁移前 KR 链的设计及 patch `16.17` 证据快照。章节中的固定 `KR` / `ASIA` URL、样本数与 Replay 路由结论仅适用于当时的 KR 环境，不表示其他国际服平台已经真实采集成功。当前平台选择见 `src/global_rofl_collector/platforms.py`。
+
 ## 目标与边界
 
 本项目是本地、按需运行的单进程批处理程序。目标是把 KR 当前版本、Ranked Solo/Duo（queue ID `420`）的高端局变成可恢复、可追溯的 `.rofl` 数据集。
@@ -24,7 +59,7 @@ collector CLI
 
 ### CLI 与配置
 
-`kr_rofl_collector.cli` 提供 `probe`、`run --target N` 和 `status`。`Config` 从项目根目录的 `.env` 读取配置，并允许同名进程环境变量覆盖文件值。配置加载时不会打印 API Key 或 LCU 凭据。
+`global_rofl_collector.cli` 提供 `probe`、`run --target N` 和 `status`。`Config` 从项目根目录的 `.env` 读取配置，并允许同名进程环境变量覆盖文件值。配置加载时不会打印 API Key 或 LCU 凭据。
 
 ### 当前版本解析
 

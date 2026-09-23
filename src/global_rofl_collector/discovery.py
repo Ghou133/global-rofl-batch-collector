@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from .db import Database
 from .errors import RiotApiError
 from .models import MatchRecord
+from .platforms import platform_route
 from .riot import RANKED_SOLO_QUEUE_ID, RiotApi, parse_match
 
 
@@ -26,11 +27,17 @@ class DiscoveryService:
         *,
         history_count: int = 20,
         progress: Callable[[str], None] | None = None,
+        platform: str = "KR",
     ):
         self.db = db
         self.api = api
         self.history_count = history_count
         self.progress = progress or (lambda _: None)
+        self.platform = platform_route(platform).platform
+
+    def _target_match_ids(self, match_ids: Iterable[str]) -> list[str]:
+        prefix = f"{self.platform}_"
+        return [match_id for match_id in match_ids if match_id.startswith(prefix)]
 
     def refresh_ladders(self, dataset_id: int, run_id: int) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -43,9 +50,9 @@ class DiscoveryService:
         return counts
 
     @staticmethod
-    def eligible(record: MatchRecord, current_patch: str) -> bool:
+    def eligible(record: MatchRecord, current_patch: str, platform: str = "KR") -> bool:
         return (
-            record.platform == "KR"
+            record.platform == platform_route(platform).platform
             and record.queue_id == RANKED_SOLO_QUEUE_ID
             and record.patch == current_patch
             and record.game_duration > 0
@@ -69,13 +76,15 @@ class DiscoveryService:
             nonlocal details_queried
             details_queried += 1
 
-        known_ids = set(self.db.discovered_match_ids(dataset_id))
+        known_ids = set(self._target_match_ids(self.db.discovered_match_ids(dataset_id)))
         needed_unique = max(len(known_ids), wanted_candidates)
         if len(known_ids) < needed_unique:
             for tier in ("CHALLENGER", "GRANDMASTER", "MASTER"):
                 for player in self.db.player_rows(dataset_id, tier):
                     puuid = str(player["puuid"])
-                    match_ids = self.api.match_ids(puuid, count=self.history_count)
+                    match_ids = self._target_match_ids(
+                        self.api.match_ids(puuid, count=self.history_count)
+                    )
                     histories_queried += 1
                     queried_puuids.add(puuid)
                     self.db.add_discoveries(dataset_id, run_id, puuid, match_ids)
@@ -100,10 +109,12 @@ class DiscoveryService:
             for tier in ("CHALLENGER", "GRANDMASTER", "MASTER"):
                 for player in self.db.player_rows(dataset_id, tier):
                     puuid = str(player["puuid"])
-                    match_ids = self.api.match_ids(
-                        puuid,
-                        count=self.history_count,
-                        start=self.history_count if puuid in queried_puuids else 0,
+                    match_ids = self._target_match_ids(
+                        self.api.match_ids(
+                            puuid,
+                            count=self.history_count,
+                            start=self.history_count if puuid in queried_puuids else 0,
+                        )
                     )
                     histories_queried += 1
                     queried_puuids.add(puuid)
@@ -153,6 +164,8 @@ class DiscoveryService:
             return eligible
         ordered = sorted(match_ids, reverse=True)
         for match_id in ordered:
+            if not match_id.startswith(f"{self.platform}_"):
+                continue
             if self.db.match_exists(match_id):
                 continue
             on_detail()
@@ -162,7 +175,12 @@ class DiscoveryService:
                 if exc.code == "API_NOT_FOUND":
                     continue
                 raise
-            is_eligible = self.eligible(record, current_patch)
+            if record.match_id != match_id or record.platform != self.platform:
+                raise RiotApiError(
+                    "API_SCHEMA_CHANGED",
+                    f"Match-V5 identity for {match_id} conflicts with {self.platform}",
+                )
+            is_eligible = self.eligible(record, current_patch, self.platform)
             self.db.store_match(dataset_id, record, is_eligible)
             if is_eligible:
                 eligible += 1

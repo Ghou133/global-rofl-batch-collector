@@ -1,5 +1,7 @@
 # 数据集与数据库 Schema
 
+> 本文描述 Riot 国际服采集数据库；dataset 按平台与 patch 隔离。腾讯国服 Replay+SUMMARY/DETAILS 使用 `data/CN/replay-paired/collector.sqlite3` 内的独立 schema。
+
 ## 总览
 
 持久化由 SQLite 数据库、`.rofl` 文件和 JSONL manifest 组成。默认数据库是 `data/collector.sqlite3`，当前 schema 版本为 `1`。
@@ -25,14 +27,14 @@
 
 ### `datasets`
 
-每个 KR patch 一条逻辑数据集。
+每个平台的每个 patch 一条逻辑数据集。
 
 | 字段 | 含义 |
 | --- | --- |
 | `id` | 内部主键 |
-| `platform` | 当前固定为 `KR` |
+| `platform` | Riot 平台 ID，如 `KR`、`EUW1` |
 | `patch_key` | 研究 patch，例如 `16.17` |
-| `exact_realm_version` | 最近一次官方 KR realm 完整版本 |
+| `exact_realm_version` | 最近一次对应平台的官方 realm 完整版本 |
 | `created_at` | 首次创建时间 |
 
 唯一约束为 `(platform, patch_key)`。每场比赛仍在 `matches.game_version_exact` 中保存自己的完整版本，不依赖 dataset 行推断 build。
@@ -96,7 +98,7 @@ Match-V5 比赛明细与质量元数据。
 | --- | --- |
 | `match_id` | 主键，例如 `KR_<gameId>` |
 | `dataset_id` | 发现它的 patch dataset |
-| `platform` | Match-V5 `platformId`，必须为 KR 才可 eligible |
+| `platform` | Match-V5 `platformId`，必须与当前 dataset 平台一致才可 eligible |
 | `game_id` | 数字 game ID，以文本保存 |
 | `queue_id` | 必须为 420 才可 eligible |
 | `game_version_exact` | Match-V5 完整 `gameVersion` |
@@ -143,7 +145,7 @@ Match-V5 比赛明细与质量元数据。
 | 状态 | 含义 |
 | --- | --- |
 | `DISCOVERED` | 已发现，尚未完成资格判断 |
-| `ELIGIBLE` | 当前 patch、KR、queue 420、已结束 |
+| `ELIGIBLE` | 当前 patch、目标平台、queue 420、已结束 |
 | `INELIGIBLE` | 被版本、平台、队列或完成条件过滤 |
 | `QUEUED` | 已排队 |
 | `DOWNLOADING` | 正在写 `.partial` |
@@ -216,7 +218,7 @@ Match-V5 比赛明细与质量元数据。
 路径：
 
 ```text
-data/KR/<patch>/manifests/dataset_manifest.jsonl
+data/<platform>/<patch>/manifests/dataset_manifest.jsonl
 ```
 
 每行一个独立 JSON 对象，只包含 `VERIFIED` Replay，按 `match_id` 稳定排序。字段如下：

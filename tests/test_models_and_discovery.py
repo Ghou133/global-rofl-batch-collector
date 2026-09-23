@@ -5,11 +5,11 @@ from typing import Any
 
 import pytest
 
-from kr_rofl_collector.db import Database
-from kr_rofl_collector.discovery import DiscoveryService
-from kr_rofl_collector.errors import RiotApiError
-from kr_rofl_collector.models import MatchRecord, Quality, patch_key, safe_build_component
-from kr_rofl_collector.riot import parse_match
+from global_rofl_collector.db import Database
+from global_rofl_collector.discovery import DiscoveryService
+from global_rofl_collector.errors import RiotApiError
+from global_rofl_collector.models import MatchRecord, Quality, patch_key, safe_build_component
+from global_rofl_collector.riot import parse_match
 
 
 @pytest.mark.parametrize(

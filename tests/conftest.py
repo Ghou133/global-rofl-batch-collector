@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from kr_rofl_collector.config import Config
-from kr_rofl_collector.db import Database
-from kr_rofl_collector.models import MatchRecord, Quality
+from global_rofl_collector.config import Config
+from global_rofl_collector.db import Database
+from global_rofl_collector.models import MatchRecord, Quality
 
 
 @pytest.fixture

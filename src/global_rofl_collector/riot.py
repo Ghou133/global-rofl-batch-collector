@@ -13,6 +13,7 @@ import httpx
 
 from .errors import RiotApiError
 from .models import MatchRecord, Quality, patch_key
+from .platforms import platform_route
 
 KR_PLATFORM_BASE = "https://kr.api.riotgames.com"
 ASIA_REGIONAL_BASE = "https://asia.api.riotgames.com"
@@ -98,7 +99,9 @@ class RiotApi:
         limiter: RateLimiter | None = None,
         sleep: Callable[[float], None] = time.sleep,
         rng: random.Random | None = None,
+        platform: str = "KR",
     ):
+        self.route = platform_route(platform)
         self._key = api_key
         self._client = client or httpx.Client(timeout=timeout, follow_redirects=True)
         self._owns_client = client is None
@@ -201,7 +204,7 @@ class RiotApi:
         if not endpoint:
             raise ValueError(f"Unsupported apex tier: {tier}")
         data = self._request_json(
-            f"{KR_PLATFORM_BASE}/lol/league/v4/{endpoint}/by-queue/{RANKED_SOLO_QUEUE}"
+            f"{self.route.league_base}/lol/league/v4/{endpoint}/by-queue/{RANKED_SOLO_QUEUE}"
         )
         if not isinstance(data, dict) or not isinstance(data.get("entries"), list):
             raise RiotApiError(
@@ -212,7 +215,7 @@ class RiotApi:
     def match_ids(self, puuid: str, *, count: int = 20, start: int = 0) -> list[str]:
         encoded = quote(puuid, safe="")
         data = self._request_json(
-            f"{ASIA_REGIONAL_BASE}/lol/match/v5/matches/by-puuid/{encoded}/ids"
+            f"{self.route.match_base}/lol/match/v5/matches/by-puuid/{encoded}/ids"
             f"?queue={RANKED_SOLO_QUEUE_ID}&start={start}&count={max(1, min(100, count))}"
         )
         if not isinstance(data, list) or not all(isinstance(item, str) for item in data):
@@ -221,7 +224,7 @@ class RiotApi:
 
     def match(self, match_id: str) -> dict[str, Any]:
         data = self._request_json(
-            f"{ASIA_REGIONAL_BASE}/lol/match/v5/matches/{quote(match_id, safe='')}"
+            f"{self.route.match_base}/lol/match/v5/matches/{quote(match_id, safe='')}"
         )
         if not isinstance(data, dict) or "metadata" not in data or "info" not in data:
             raise RiotApiError("API_SCHEMA_CHANGED", "Unexpected Match-V5 match response")
@@ -229,7 +232,10 @@ class RiotApi:
 
 
 class PatchResolver:
-    def __init__(self, *, timeout: float = 30.0, client: httpx.Client | None = None):
+    def __init__(
+        self, *, platform: str = "KR", timeout: float = 30.0, client: httpx.Client | None = None
+    ):
+        self.route = platform_route(platform)
         self._client = client or httpx.Client(timeout=timeout, follow_redirects=True)
         self._owns_client = client is None
 
@@ -239,17 +245,22 @@ class PatchResolver:
 
     def resolve(self) -> tuple[str, str]:
         try:
-            response = self._client.get(KR_REALM_URL)
+            response = self._client.get(self.route.realm_url)
             response.raise_for_status()
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             raise RiotApiError(
-                "PATCH_RESOLUTION_FAILED", "Could not read the official KR realm", retryable=True
+                "PATCH_RESOLUTION_FAILED",
+                f"Could not read the official {self.route.platform} realm",
+                retryable=True,
             ) from exc
         exact = data.get("v") if isinstance(data, dict) else None
         patch = patch_key(exact)
         if not isinstance(exact, str) or patch is None:
-            raise RiotApiError("PATCH_SCHEMA_CHANGED", "KR realm did not contain a usable version")
+            raise RiotApiError(
+                "PATCH_SCHEMA_CHANGED",
+                f"{self.route.platform} realm did not contain a usable version",
+            )
         return patch, exact
 
 

@@ -6,8 +6,8 @@ from collections.abc import Mapping
 import httpx
 import pytest
 
-from kr_rofl_collector.errors import RiotApiError
-from kr_rofl_collector.riot import RateLimiter, RiotApi
+from global_rofl_collector.errors import RiotApiError
+from global_rofl_collector.riot import RateLimiter, RiotApi
 
 
 class FakeClock:

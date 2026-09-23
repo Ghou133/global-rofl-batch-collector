@@ -1,5 +1,7 @@
 # Final focused code review — KR ROFL collector
 
+> 历史 KR V1 代码审查快照。此处的路径、60 项测试和结论不覆盖后来迁入的国际服多平台与国服代码；当前发布状态见根目录 `README.md` 和 `ROADMAP.md`。
+
 ## Verdict
 
 - `codeQualityStatus`: `CLEAR`

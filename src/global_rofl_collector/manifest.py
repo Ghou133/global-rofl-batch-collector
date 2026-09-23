@@ -8,8 +8,8 @@ from typing import Any
 from .db import Database
 
 
-def manifest_path(data_dir: Path, patch: str) -> Path:
-    return data_dir / "KR" / patch / "manifests" / "dataset_manifest.jsonl"
+def manifest_path(data_dir: Path, patch: str, platform: str = "KR") -> Path:
+    return data_dir / platform / patch / "manifests" / "dataset_manifest.jsonl"
 
 
 def _manifest_item(row: Any) -> dict[str, Any]:
@@ -47,8 +47,10 @@ def _manifest_item(row: Any) -> dict[str, Any]:
     }
 
 
-def write_manifest(db: Database, dataset_id: int, data_dir: Path, patch: str) -> Path:
-    target = manifest_path(data_dir, patch)
+def write_manifest(
+    db: Database, dataset_id: int, data_dir: Path, patch: str, platform: str = "KR"
+) -> Path:
+    target = manifest_path(data_dir, patch, platform)
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".tmp")
     rows = db.manifest_rows(dataset_id)
@@ -78,4 +80,3 @@ def write_manifest(db: Database, dataset_id: int, data_dir: Path, patch: str) ->
         raise ValueError("Manifest verification count mismatch")
     os.replace(temporary, target)
     return target
-

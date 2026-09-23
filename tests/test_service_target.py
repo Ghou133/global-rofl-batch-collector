@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-import kr_rofl_collector.service as service_module
-from kr_rofl_collector.config import Config
-from kr_rofl_collector.errors import ConfigurationError
-from kr_rofl_collector.locking import CollectorLock
-from kr_rofl_collector.models import MatchRecord
-from kr_rofl_collector.replay import replay_paths, verify_rofl
-from kr_rofl_collector.service import CollectorService
+import global_rofl_collector.service as service_module
+from global_rofl_collector.config import Config
+from global_rofl_collector.errors import ConfigurationError
+from global_rofl_collector.locking import CollectorLock
+from global_rofl_collector.models import MatchRecord
+from global_rofl_collector.replay import replay_paths, verify_rofl
+from global_rofl_collector.service import CollectorService
 
 
 def _rofl_bytes(version: str = "26.18.704.1234") -> bytes:

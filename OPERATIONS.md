@@ -1,5 +1,7 @@
 # 操作与故障恢复
 
+> 本文保留原 KR 采集链的操作细节。当前国际平台选择与内置国服命令以 [README.md](README.md) 为准。
+
 ## 一次性安装
 
 在 Windows PowerShell 中进入项目目录：

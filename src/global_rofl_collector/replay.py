@@ -365,10 +365,13 @@ class ReplayBackendAcquirer:
         results: list[ProbeEvidence] = []
         config = self.lcu.configuration()
         platform = self.lcu.current_platform()
+        target_platform = match_id.split("_", 1)[0].upper()
         route_a_response = self.lcu.route_a_request(game_id)
         time.sleep(1.0)
         route_a_log = self.lcu.latest_route_evidence(game_id)
-        route_a_pass = platform == "KR" and route_a_response.status_code in (200, 202, 204)
+        route_a_pass = (
+            platform == target_platform and route_a_response.status_code in (200, 202, 204)
+        )
         results.append(
             ProbeEvidence(
                 route="A_CROSS_REGION_LCU",
@@ -377,7 +380,7 @@ class ReplayBackendAcquirer:
                 http_status=route_a_response.status_code,
                 auth_result="LCU_AUTHENTICATED",
                 region_evidence=(
-                    "LCU current platform is KR"
+                    f"LCU current platform is {target_platform}"
                     if route_a_pass
                     else (
                         f"LCU current platform {platform}; "
@@ -420,7 +423,7 @@ class ReplayBackendAcquirer:
                         capability=capability,
                         mechanism=(
                             "Authenticated player-platform match-history-query "
-                            "infoType/replay with explicit KR match identity"
+                            f"infoType/replay with explicit {target_platform} match identity"
                         ),
                         http_status=response.status_code,
                         auth_result=(
@@ -435,6 +438,7 @@ class ReplayBackendAcquirer:
                             "content_disposition": disposition,
                             "payload_magic": prefix[:4].decode("ascii", errors="replace"),
                             "content_encoding": response.headers.get("Content-Encoding"),
+                            "client_platform": platform,
                         },
                     )
                 )
@@ -564,7 +568,7 @@ class ReplayBackendAcquirer:
 
 def replay_paths(data_dir: Path, row: Any) -> tuple[Path, Path]:
     build = safe_build_component(str(row["game_version_exact"]))
-    directory = data_dir / "KR" / str(row["patch_key"]) / "builds" / build / "rofl"
+    directory = data_dir / str(row["platform"]) / str(row["patch_key"]) / "builds" / build / "rofl"
     final = directory / f"{row['match_id']}.rofl"
     return final, final.with_suffix(".rofl.partial")
 
@@ -575,8 +579,17 @@ class DownloadManager:
         self.config = config
         self.acquirer = acquirer
 
+    @staticmethod
+    def _verify_expected_version(row: Any, verification: Verification) -> None:
+        if verification.game_version != str(row["game_version_exact"]):
+            raise IntegrityError(
+                "ROFL_BUILD_MISMATCH",
+                f"Replay {row['match_id']} contains build {verification.game_version}",
+            )
+
     def _adopt(self, row: Any, final: Path) -> Verification:
         verification = verify_rofl(final)
+        self._verify_expected_version(row, verification)
         relative = final.relative_to(self.config.data_dir).as_posix()
         self.db.record_download(
             str(row["match_id"]),
@@ -636,7 +649,8 @@ class DownloadManager:
             # A complete partial can be safely published without another network request.
             if partial.is_file():
                 try:
-                    verify_rofl(partial)
+                    verification = verify_rofl(partial)
+                    self._verify_expected_version(row, verification)
                 except IntegrityError:
                     continue
                 final.parent.mkdir(parents=True, exist_ok=True)
@@ -676,6 +690,7 @@ class DownloadManager:
         try:
             written = self.acquirer.download_to(match_id, partial)
             verification = verify_rofl(partial, expected_size=written)
+            self._verify_expected_version(row, verification)
             self.db.transition_job(match_id, JobState.DOWNLOADING, JobState.DOWNLOADED)
             if final.exists():
                 raise IntegrityError(

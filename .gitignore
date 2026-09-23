@@ -4,6 +4,7 @@ euv.txt
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.pytest-tmp/
 .ruff_cache/
 .coverage
 htmlcov/
@@ -17,4 +18,3 @@ logs/
 *.sqlite3-wal
 *.rofl
 *.rofl.partial
-

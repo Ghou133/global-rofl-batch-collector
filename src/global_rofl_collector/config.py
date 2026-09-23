@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import ConfigurationError
+from .platforms import platform_route
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -43,9 +44,13 @@ class Config:
     api_min_interval: float
     api_max_retries: int
     history_count: int
+    platform: str = "KR"
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "platform", platform_route(self.platform).platform)
 
     @classmethod
-    def load(cls, project_root: Path | None = None) -> Config:
+    def load(cls, project_root: Path | None = None, *, platform: str | None = None) -> Config:
         root = (project_root or Path.cwd()).resolve()
         file_values = _read_dotenv(root / ".env")
 
@@ -69,6 +74,7 @@ class Config:
             api_min_interval=float(setting("RIOT_API_MIN_INTERVAL", "1.25") or "1.25"),
             api_max_retries=int(setting("RIOT_API_MAX_RETRIES", "6") or "6"),
             history_count=max(1, min(100, int(setting("MATCH_HISTORY_COUNT", "20") or "20"))),
+            platform=platform or setting("COLLECTOR_PLATFORM", "KR") or "KR",
         )
 
     def require_api_key(self) -> str:
@@ -83,4 +89,3 @@ class Config:
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
-

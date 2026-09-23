@@ -11,12 +11,12 @@ from typing import Any
 import httpx
 import pytest
 
-from kr_rofl_collector.config import Config
-from kr_rofl_collector.db import Database
-from kr_rofl_collector.errors import IntegrityError, ReplayError
-from kr_rofl_collector.manifest import manifest_path, write_manifest
-from kr_rofl_collector.models import JobState, MatchRecord, Quality
-from kr_rofl_collector.replay import (
+from global_rofl_collector.config import Config
+from global_rofl_collector.db import Database
+from global_rofl_collector.errors import IntegrityError, ReplayError
+from global_rofl_collector.manifest import manifest_path, write_manifest
+from global_rofl_collector.models import JobState, MatchRecord, Quality
+from global_rofl_collector.replay import (
     DownloadManager,
     ReplayBackendAcquirer,
     replay_paths,
@@ -353,6 +353,27 @@ def test_failed_integrity_keeps_partial_and_becomes_retryable(
         "SELECT state,resume_state,attempts FROM replay_jobs WHERE match_id='KR_1001'"
     ).fetchone()
     assert tuple(job) == (JobState.FAILED_RETRYABLE, JobState.QUEUED, 1)
+
+
+def test_download_rejects_replay_from_another_build_and_preserves_partial(
+    db: Database,
+    config: Config,
+    match_factory: Callable[..., MatchRecord],
+) -> None:
+    _, run_id, row = _seed_match(db, match_factory)
+    acquirer = FakeAcquirer(_rofl_bytes(version="26.18.999.1"))
+    manager = DownloadManager(db, config, acquirer)  # type: ignore[arg-type]
+
+    with pytest.raises(IntegrityError, match="ROFL_BUILD_MISMATCH"):
+        manager.download(row, run_id)
+
+    final, partial = replay_paths(config.data_dir, row)
+    assert not final.exists()
+    assert partial.read_bytes() == acquirer.payload
+    assert db.download_row("KR_1001") is None
+    assert db.connection.execute(
+        "SELECT state FROM replay_jobs WHERE match_id='KR_1001'"
+    ).fetchone()["state"] == JobState.FAILED_PERMANENT
 
 
 def test_reconcile_adopts_an_existing_final_without_redownload(

@@ -8,6 +8,7 @@ from typing import Any
 
 from .config import Config
 from .errors import CollectorError
+from .platforms import SUPPORTED_PLATFORMS
 from .service import CollectorService
 
 
@@ -21,15 +22,18 @@ def _format_bytes(value: int) -> str:
 
 
 def _print_probe(result: dict[str, Any]) -> None:
+    platform = str(result.get("PLATFORM", "KR"))
     ordered = (
+        "PLATFORM",
+        "MATCH_REGION",
         "RIOT_API_KEY",
-        "KR_LADDER_API",
-        "ASIA_MATCH_API",
+        "KR_LADDER_API" if platform == "KR" else "LADDER_API",
+        "ASIA_MATCH_API" if platform == "KR" else "MATCH_API",
         "CURRENT_PATCH",
         "LEAGUE_CLIENT",
         "LCU",
         "REPLAY_ACQUISITION",
-        "KR_ACCOUNT_REQUIRED",
+        "KR_ACCOUNT_REQUIRED" if platform == "KR" else "TARGET_PLATFORM_ACCOUNT_REQUIRED",
         "DATABASE",
         "STORAGE",
         "EXISTING_DATASET",
@@ -48,6 +52,7 @@ def _print_status(data: dict[str, Any]) -> None:
         print(data.get("message", "No dataset"))
         return
     lines = [
+        ("platform", data["platform"]),
         ("current patch", data["current_patch"]),
         ("realm version", data["realm_version"]),
         ("players discovered", data["players_discovered"]),
@@ -100,7 +105,7 @@ def _print_status(data: dict[str, Any]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="collector",
-        description="KR current-patch high-elo Ranked Solo ROFL batch collector",
+        description="International current-patch high-elo Ranked Solo ROFL batch collector",
     )
     parser.add_argument(
         "--project-root",
@@ -109,6 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="project directory containing .env (default: current directory)",
     )
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    parser.add_argument(
+        "--platform",
+        type=str.upper,
+        choices=SUPPORTED_PLATFORMS,
+        help="international platform (default: COLLECTOR_PLATFORM or KR)",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("probe", help="test Riot API, patch, League Client, and replay route")
     run = commands.add_parser("run", help="collect until the patch dataset total reaches target")
@@ -126,8 +137,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    config = Config.load(args.project_root)
     try:
+        config = Config.load(args.project_root, platform=args.platform)
         with CollectorService(config, progress=lambda text: print(text, flush=True)) as service:
             if args.command == "probe":
                 result = service.probe()
@@ -142,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
                 else:
                     print(result["status"])
+                    print(f"PLATFORM: {result['platform']}")
                     print(f"CURRENT_PATCH: {result['patch']}")
                     print(f"VERIFIED: {result['verified']}/{result['target']}")
                     print(f"MANIFEST: {result['manifest']}")
